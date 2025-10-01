@@ -48,18 +48,19 @@
       </form>
 
       <ul class="entries">
-        {% for entry in entries %} {% if query.lower() in entry.title.lower() or
-        query.lower() in entry.text.lower() %}
+        {% for entry in entries %}
+        {% if query and (query.lower() in entry.title.lower() or query.lower() in entry.text.lower()) %}
         <li class="entry">
-          <h2 id="{{ entry.post_id }}">{{ entry.title }}</h2>
+          <h2 id="{{ entry.id }}">{{ entry.title }}</h2>
           {{ entry.text|safe }}
         </li>
-        {% endif %} {% endfor %}
+        {% endif %}
+        {% endfor %}
       </ul>
     </div>
     <script
       type="text/javascript"
-      src="{{url_for('static', filename='main.js') }}"
+      src="{{ url_for('static', filename='main.js') }}"
     ></script>
   </body>
 </html>

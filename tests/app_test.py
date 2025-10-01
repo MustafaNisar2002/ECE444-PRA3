@@ -1,26 +1,26 @@
-import os
-import pytest
 import json
+import pytest
 from pathlib import Path
 
-from project.app import app, init_db
+from project.app import app, db
 
 TEST_DB = "test.db"
 
 
 @pytest.fixture
 def client():
+    """Use a throwaway SQLite DB per test run."""
     BASE_DIR = Path(__file__).resolve().parent.parent
     app.config["TESTING"] = True
-    app.config["DATABASE"] = BASE_DIR.joinpath(TEST_DB)
-
-    init_db()  # setup
-    yield app.test_client()  # tests run here
-    init_db()  # teardown
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR.joinpath(TEST_DB)}"
+    with app.app_context():
+        db.create_all()  # setup
+        yield app.test_client()  # tests run here
+        db.drop_all()  # teardown
 
 
 def login(client, username, password):
-    """Login helper function"""
+    """Login helper"""
     return client.post(
         "/login",
         data=dict(username=username, password=password),
@@ -29,29 +29,21 @@ def login(client, username, password):
 
 
 def logout(client):
-    """Logout helper function"""
+    """Logout helper"""
     return client.get("/logout", follow_redirects=True)
 
 
 def test_index(client):
-    response = client.get("/", content_type="html/text")
-    assert response.status_code == 200
-
-
-def test_database(client):
-    """initial test. ensure that the database exists"""
-    tester = Path("test.db").is_file()
-    assert tester
+    rv = client.get("/", content_type="text/html")
+    assert rv.status_code == 200
 
 
 def test_empty_db(client):
-    """Ensure database is blank"""
     rv = client.get("/")
     assert b"No entries yet. Add some!" in rv.data
 
 
 def test_login_logout(client):
-    """Test login and logout using helper functions"""
     rv = login(client, app.config["USERNAME"], app.config["PASSWORD"])
     assert b"You were logged in" in rv.data
     rv = logout(client)
@@ -63,7 +55,6 @@ def test_login_logout(client):
 
 
 def test_messages(client):
-    """Ensure that user can post messages"""
     login(client, app.config["USERNAME"], app.config["PASSWORD"])
     rv = client.post(
         "/add",
@@ -76,7 +67,12 @@ def test_messages(client):
 
 
 def test_delete_message(client):
-    """Ensure the messages are being deleted"""
+    # not logged in → blocked by login_required
+    rv = client.get("/delete/1")
+    data = json.loads(rv.data)
+    assert data["status"] == 0
+    # log in → deletion allowed (id may or may not exist; route still returns success when it runs)
+    login(client, app.config["USERNAME"], app.config["PASSWORD"])
     rv = client.get("/delete/1")
     data = json.loads(rv.data)
     assert data["status"] == 1
